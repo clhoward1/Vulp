@@ -1,4 +1,7 @@
 #define SDL_MAIN_USE_CALLBACKS
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -16,11 +19,51 @@ SDL_Surface *windowSurface;
 SDL_Texture *hello;
 SDL_FRect rect = {0.0f, 0.0f, 120.0f, 26.0f};
 Uint32 maroon = 0x7A0000;
+TTF_Text *textino;
+const int fontSize = 20;
 
 
-void update() {
+//Gets input from keyboard
+/*
+void getInput() {
+
+    SDL_Event e;
+
+    //SDL_StartTextInput(window);
 
 
+    
+    while (SDL_PollEvent(&e)) {
+
+        switch (e.type) {
+            case SDL_EVENT_KEY_DOWN:
+                SDL_Log("Key Down");
+                SDL_SetRenderDrawColor(renderer, 122, 0, 0, 255);
+                break;
+            case SDL_EVENT_KEY_UP:
+                SDL_Log("Key Up");
+                SDL_SetRenderDrawColor(renderer, 122, 0, 0, 255);
+                break;
+            case SDL_EVENT_MOUSE_MOTION:
+                SDL_Log("Mouse Moved");
+                break;
+            default:
+                SDL_Log("Unhandled Event");
+                break;
+        }
+
+    }
+    
+
+    //SDL_StopTextInput(window);
+}
+*/
+
+//Turns key press into texture to render
+void renderText(char *inputText) {
+
+    SDL_RenderClear(renderer);
+    
 }
 
 void render() {
@@ -36,6 +79,26 @@ void render() {
     hello = SDL_CreateTextureFromSurface(renderer, windowSurface);
 
     SDL_RenderTexture(renderer, hello, NULL, NULL);
+
+    TTF_DrawRendererText(textino, 100, 100);
+
+    SDL_RenderPresent(renderer);
+
+}
+
+void renderKey(const char* inputKey) {
+
+    SDL_RenderClear(renderer);
+
+    SDL_FillSurfaceRect(windowSurface, NULL, maroon);
+    SDL_BlitSurface(texty, NULL, windowSurface, NULL);
+
+    hello = SDL_CreateTextureFromSurface(renderer, windowSurface);
+    SDL_RenderTexture(renderer, hello, NULL, NULL);
+
+    textino = TTF_CreateText(textEngine, font, inputKey, strlen(inputKey));
+    TTF_SetTextColor(textino, 0, 0, 255, 255);
+    TTF_DrawRendererText(textino, 200, 200);
 
     SDL_RenderPresent(renderer);
 
@@ -67,7 +130,7 @@ SDL_AppResult icon() {
 
 // loads font
 SDL_AppResult text() {
-    font = TTF_OpenFont("assets/FreeSansBold.ttf", 20);
+    font = TTF_OpenFont("assets/FreeSansBold.ttf", fontSize);
 
     if(!font) {
 
@@ -83,11 +146,15 @@ SDL_AppResult text() {
         return SDL_APP_FAILURE;
     }
 
-    SDL_Color color = {0, 255, 0, 255};
+    SDL_Color green = {0, 255, 0, 255};
 
     windowSurface = SDL_GetWindowSurface(window);
 
-    texty = TTF_RenderText_Blended(font, "Hello, World", 12, color);
+    textino = TTF_CreateText(textEngine, font, "haiiii", 6); 
+
+    TTF_SetTextColor(textino, 0, 0, 255, 255);
+
+    texty = TTF_RenderText_Blended(font, "Hello, World", 12, green);
 
 
     hello = SDL_CreateTextureFromSurface(renderer, texty);
@@ -132,6 +199,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     icon();
     text();
+    render();
     
     return SDL_APP_CONTINUE;
 }
@@ -139,9 +207,22 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 //Waits for events to be called
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
-    if (event->type == SDL_EVENT_QUIT) {
 
-        return SDL_APP_SUCCESS;
+    switch (event->type) {
+        case SDL_EVENT_QUIT:
+            return SDL_APP_SUCCESS;
+        case SDL_EVENT_KEY_DOWN:
+            SDL_Keycode keycode = SDL_GetKeyFromScancode(event->key.scancode, event->key.mod, false);
+            const char* key = SDL_GetKeyName(keycode);
+            
+            SDL_Log(key);
+            renderKey(key);
+            break;
+    }
+
+
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        
     }
 
     return SDL_APP_CONTINUE;
@@ -150,7 +231,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 //Iterates logic every frame
 SDL_AppResult SDL_AppIterate(void *appstate) {
     
-    render();
+    //render();
     
 
     return SDL_APP_CONTINUE;
