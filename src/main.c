@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include "buffer.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 960
@@ -21,6 +22,8 @@ SDL_FRect rect = {0.0f, 0.0f, 120.0f, 26.0f};
 Uint32 maroon = 0x7A0000;
 TTF_Text *textino;
 const int fontSize = 20;
+bool textInputComplete = false;
+
 
 
 //Gets input from keyboard
@@ -29,43 +32,33 @@ void getInput() {
 
     SDL_Event e;
 
-    //SDL_StartTextInput(window);
+    textInputComplete = false;
+
+    SDL_StartTextInput(window);
 
 
-    
-    while (SDL_PollEvent(&e)) {
+    while (!textInputComplete) {
+        while (SDL_PollEvent(&e)) {
 
-        switch (e.type) {
-            case SDL_EVENT_KEY_DOWN:
-                SDL_Log("Key Down");
-                SDL_SetRenderDrawColor(renderer, 122, 0, 0, 255);
-                break;
-            case SDL_EVENT_KEY_UP:
-                SDL_Log("Key Up");
-                SDL_SetRenderDrawColor(renderer, 122, 0, 0, 255);
-                break;
-            case SDL_EVENT_MOUSE_MOTION:
-                SDL_Log("Mouse Moved");
-                break;
-            default:
-                SDL_Log("Unhandled Event");
-                break;
+            switch (e.type) {
+                case SDL_EVENT_TEXT_INPUT:
+                    SDL_Log("Key Pressed");
+                    renderKey(e.text.text);
+                    textInputComplete = true;
+                    break;
+                default:
+                    SDL_Log("Unhandled Event");
+                    break;
+            }
         }
-
     }
     
 
-    //SDL_StopTextInput(window);
+    SDL_StopTextInput(window);
 }
 */
 
-//Turns key press into texture to render
-void renderText(char *inputText) {
-
-    SDL_RenderClear(renderer);
-    
-}
-
+//initial render
 void render() {
 
     SDL_RenderClear(renderer);
@@ -164,8 +157,6 @@ SDL_AppResult text() {
     return SDL_APP_CONTINUE;
 }
 
-
-
 //Initializes SDL Window
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
@@ -200,6 +191,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     icon();
     text();
     render();
+
+    SDL_StartTextInput(window);
     
     return SDL_APP_CONTINUE;
 }
@@ -211,19 +204,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     switch (event->type) {
         case SDL_EVENT_QUIT:
             return SDL_APP_SUCCESS;
-        case SDL_EVENT_KEY_DOWN:
+        /*case SDL_EVENT_KEY_DOWN:
             SDL_Keycode keycode = SDL_GetKeyFromScancode(event->key.scancode, event->key.mod, false);
             const char* key = SDL_GetKeyName(keycode);
             
             SDL_Log(key);
             renderKey(key);
             break;
+            */
+        case SDL_EVENT_TEXT_INPUT:
+            SDL_Log(event->text.text);
+            renderKey(event->text.text);
+            textInputComplete = true;
+            break;
     }
 
-
-    if (event->type == SDL_EVENT_KEY_DOWN) {
-        
-    }
 
     return SDL_APP_CONTINUE;
 }
@@ -239,6 +234,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
 //Frees memory upon app quit
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
+
+    SDL_StopTextInput(window);
 
     SDL_DestroyWindow(window);
     window = NULL;
