@@ -11,89 +11,149 @@
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 960
+
+#define FONT_SIZE 20
+#define BLINK_INTERVAL_MS 667
+
+const Uint32 BLACK = 0x262626; // hex code for a lighter black #262626
+const Uint32 WHITE = 0xDCDCDC; // a light grey to stand in for white #DCDCDC
  
 SDL_Window *window;
 SDL_Renderer *renderer;
+
+SDL_Surface *textSurface;
+SDL_Surface *windowSurface;
+SDL_Texture *windowTexture;
+
 TTF_Font *font;
 TTF_TextEngine *textEngine;
-SDL_Surface *texty;
-SDL_Surface *windowSurface;
-SDL_Texture *hello;
-SDL_FRect rect = {0.0f, 0.0f, 120.0f, 26.0f};
-Uint32 black = 0x262626;
-TTF_Text *textino;
-const int fontSize = 20;
 
+TTF_Text *displayText;
+
+SDL_FRect cursorRect = {12, 4, 12, 20};
+bool cursorOn = false;
 
 gapBuffer *buffer;
+
+Uint64 currentTime, previousTime = 0;
 
 
 
 //initial render
-void render() {
+void initialRender() {
 
     SDL_RenderClear(renderer);
 
-    //SDL_SetRenderDrawColor(renderer, 122, 0, 0, 255); //rgba
+    SDL_FillSurfaceRect(windowSurface, NULL, BLACK);
 
-    SDL_FillSurfaceRect(windowSurface, NULL, black);
+    windowTexture = SDL_CreateTextureFromSurface(renderer, windowSurface);
 
-    //SDL_BlitSurface(texty, NULL, windowSurface, NULL);
-
-    hello = SDL_CreateTextureFromSurface(renderer, windowSurface);
-
-    SDL_RenderTexture(renderer, hello, NULL, NULL);
-
-    TTF_DrawRendererText(textino, 100, 100);
+    SDL_RenderTexture(renderer, windowTexture, NULL, NULL);
 
     SDL_RenderPresent(renderer);
-
 }
 
-void inBuffer() {
+
+void renderCursor() {
+
+    if (cursorOn) {
+
+        //int textWidth = 0, textHeight = 0;
+
+        //TTF_GetTextSize(displayText, &textWidth, &textHeight);
+
+        cursorRect.x = (buffer->gapLeft * 12) + 12;
+
+        SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
+        SDL_RenderFillRect(renderer, &cursorRect);
+    }
+}
+
+void cursorMoveRender() {
+
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer, windowTexture, NULL, NULL);
+    cursorOn = true;
+    renderCursor();
+    SDL_RenderPresent(renderer);
+}
+
+
+bool checkTimeInterval() {
+
+    currentTime = SDL_GetTicks();
+
+    if (currentTime > previousTime + BLINK_INTERVAL_MS) {
+        cursorOn = !cursorOn;
+        previousTime = currentTime;  
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+void initializeBuffer() {
 
     buffer = initBuffer();
-
 }
 
-void addToBuffer(char *input) {
 
-    insert(input, buffer->gapLeft, buffer);
-    
-}
+void renderKey() {
 
-void renderText() {
+    windowSurface = SDL_GetWindowSurface(window);
 
-}
+    size_t preGap = buffer->gapLeft;
+    size_t postGap = buffer->totalSize - buffer->gapRight - 1;
 
-void renderKey(const char* inputKey) {
+    char *renderText = malloc(preGap + postGap + 1);
+
+    memcpy(renderText, buffer->data, preGap);
+    memcpy(renderText + preGap, buffer->data + buffer->gapRight + 1, postGap);
+    renderText[preGap + postGap] = '\0';
 
     SDL_RenderClear(renderer);
 
-    SDL_FillSurfaceRect(windowSurface, NULL, black);
-    //SDL_BlitSurface(texty, NULL, windowSurface, NULL);
+    SDL_FillSurfaceRect(windowSurface, NULL, BLACK);
 
-    hello = SDL_CreateTextureFromSurface(renderer, windowSurface);
-    SDL_RenderTexture(renderer, hello, NULL, NULL);
-    
+    displayText = TTF_CreateText(textEngine, font, renderText, buffer->totalSize);
 
-    addToBuffer((char*)inputKey);
+    TTF_SetTextColor(displayText, 220, 220, 220, 255);
 
-    for (int i = 0; i < strlen(buffer->buffer); i++) {
-        printf("%c", buffer->buffer[i]);
+    TTF_DrawSurfaceText(displayText, 12, 4, windowSurface);
+
+    windowTexture = SDL_CreateTextureFromSurface(renderer, windowSurface);
+    SDL_RenderTexture(renderer, windowTexture, NULL, NULL);
+
+    printf("\n");
+    for (int i = 0; i < strlen(buffer->data); i++) {
+        printf("%c", buffer->data[i]);
     }
-    textino = TTF_CreateText(textEngine, font, buffer->buffer, strlen(buffer->buffer));
-
-
-    TTF_SetTextColor(textino, 220, 220, 220, 255);
-    TTF_DrawRendererText(textino, 10, 0);
+    
+    
+    renderCursor();
 
     SDL_RenderPresent(renderer);
-
 }
 
 
-// sets the window icon on the top left
+void addToBuffer(const char *input) {
+
+    insert((char*)input, buffer->gapLeft, buffer);
+
+    renderKey();
+}
+
+void removeFromBuffer() {
+
+    if (buffer->gapLeft > 0) {
+        backspace(buffer);
+        renderKey();
+    }
+}
+
+
+// sets the application icon
 SDL_AppResult icon() {
 
     SDL_Surface *icon = IMG_Load("assets/server-icon.png");
@@ -112,13 +172,14 @@ SDL_AppResult icon() {
     }
 
     SDL_DestroySurface(icon);
+    icon = NULL;
 
     return SDL_APP_CONTINUE;
 }
 
 // loads font
 SDL_AppResult text() {
-    font = TTF_OpenFont("assets/FreeSansBold.ttf", fontSize);
+    font = TTF_OpenFont("assets/FreeMonoBold.ttf", FONT_SIZE);
 
     if(!font) {
 
@@ -126,7 +187,7 @@ SDL_AppResult text() {
         return SDL_APP_FAILURE;
     }
 
-    textEngine = TTF_CreateRendererTextEngine(renderer);
+    textEngine = TTF_CreateSurfaceTextEngine();
 
     if(!textEngine) {
 
@@ -134,15 +195,7 @@ SDL_AppResult text() {
         return SDL_APP_FAILURE;
     }
 
-    SDL_Color green = {0, 255, 0, 255};
-
     windowSurface = SDL_GetWindowSurface(window);
-
-    texty = TTF_RenderText_Blended(font, "Hello, World", 12, green);
-
-    hello = SDL_CreateTextureFromSurface(renderer, texty);
-
-    SDL_RenderTexture(renderer, hello, NULL, &rect);
 
     return SDL_APP_CONTINUE;
 }
@@ -178,13 +231,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         return SDL_APP_FAILURE;
     }
 
-    inBuffer();
+    initializeBuffer();
 
     icon();
     text();
-    render();
+    initialRender();
 
     SDL_StartTextInput(window);
+
+    printf("\nBuffer totalSize: %d", buffer->totalSize);
     
     return SDL_APP_CONTINUE;
 }
@@ -196,18 +251,28 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     switch (event->type) {
         case SDL_EVENT_QUIT:
             return SDL_APP_SUCCESS;
-        /*case SDL_EVENT_KEY_DOWN:
-            SDL_Keycode keycode = SDL_GetKeyFromScancode(event->key.scancode, event->key.mod, false);
-            const char* key = SDL_GetKeyName(keycode);
-            
-            SDL_Log(key);
-            renderKey(key);
+        case SDL_EVENT_KEY_DOWN:
+            switch (event->key.key) {
+                case SDLK_BACKSPACE: 
+                    removeFromBuffer();
+                    break;
+                case SDLK_LEFT:
+                    shiftLeft((buffer->gapLeft - 1), buffer);
+                    cursorMoveRender();
+                    renderKey();
+                    break;
+                case SDLK_RIGHT:
+                    shiftRight((buffer->gapLeft + 1), buffer);
+                    cursorMoveRender();
+                    renderKey();
+                    break;
+            }
             break;
-            */
         case SDL_EVENT_TEXT_INPUT:
-            SDL_Log(event->text.text);
-            renderKey(event->text.text);
-            //textInputComplete = true;
+            addToBuffer(event->text.text);
+            break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            renderKey();
             break;
     }
 
@@ -215,12 +280,16 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     return SDL_APP_CONTINUE;
 }
 
-//Iterates logic every frame
-SDL_AppResult SDL_AppIterate(void *appstate) {
-    
-    //render();
-    
 
+SDL_AppResult SDL_AppIterate(void *appstate) {
+
+    if(checkTimeInterval()) {
+        SDL_RenderClear(renderer);
+        SDL_RenderTexture(renderer, windowTexture, NULL, NULL);
+        renderCursor();
+        SDL_RenderPresent(renderer);
+    }
+    
     return SDL_APP_CONTINUE;
 }
 
@@ -229,15 +298,25 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
     SDL_StopTextInput(window);
 
-    SDL_DestroyWindow(window);
-    window = NULL;
-
-    SDL_DestroyRenderer(renderer);
-    renderer = NULL;
-
+    free(buffer);
+    buffer = NULL;
+    TTF_DestroyText(displayText);
+    displayText = NULL;
+    TTF_DestroyRendererTextEngine(textEngine);
+    textEngine = NULL;
     TTF_CloseFont(font);
     font = NULL;
-
+    SDL_DestroyTexture(windowTexture);
+    windowTexture = NULL;
+    SDL_DestroySurface(windowSurface);
+    windowSurface = NULL;
+    SDL_DestroySurface(textSurface);
+    textSurface = NULL;
+    SDL_DestroyRenderer(renderer);
+    renderer = NULL;
+    SDL_DestroyWindow(window);
+    window = NULL;
+    
     TTF_Quit();
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
