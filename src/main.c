@@ -8,6 +8,7 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdio.h>
 #include "buffer.h"
+#include "cursor.h"
 
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 960
@@ -29,15 +30,17 @@ TTF_Font *font;
 TTF_TextEngine *textEngine;
 
 TTF_Text *displayText;
+char *renderText;
 
 SDL_FRect cursorRect = {12, 4, 12, 20};
 bool cursorOn = false;
 
 gapBuffer *buffer;
+cursor *cur;
 
 Uint64 currentTime, previousTime = 0;
 
-
+FILE *textFile;
 
 //initial render
 void initialRender() {
@@ -62,7 +65,14 @@ void renderCursor() {
 
         //TTF_GetTextSize(displayText, &textWidth, &textHeight);
 
-        cursorRect.x = (buffer->gapLeft * 12) + 12;
+        /*
+        if (buffer->data[buffer->gapLeft - 1] == '\n') {
+            cursorRect.x = (1 * 12) + 12;
+        }
+        */
+        
+        cursorRect.x = (buffer->lineOffset * 12) + 12;
+        cursorRect.y = (buffer->lineCount * 22) + 4;
 
         SDL_SetRenderDrawColor(renderer, 220, 220, 220, 255);
         SDL_RenderFillRect(renderer, &cursorRect);
@@ -96,6 +106,8 @@ bool checkTimeInterval() {
 void initializeBuffer() {
 
     buffer = initBuffer();
+    cur = initCursor();
+
 }
 
 
@@ -106,7 +118,7 @@ void renderKey() {
     size_t preGap = buffer->gapLeft;
     size_t postGap = buffer->totalSize - buffer->gapRight - 1;
 
-    char *renderText = malloc(preGap + postGap + 1);
+    renderText = malloc(preGap + postGap + 1);
 
     memcpy(renderText, buffer->data, preGap);
     memcpy(renderText + preGap, buffer->data + buffer->gapRight + 1, postGap);
@@ -119,17 +131,17 @@ void renderKey() {
     displayText = TTF_CreateText(textEngine, font, renderText, buffer->totalSize);
 
     TTF_SetTextColor(displayText, 220, 220, 220, 255);
-
     TTF_DrawSurfaceText(displayText, 12, 4, windowSurface);
 
     windowTexture = SDL_CreateTextureFromSurface(renderer, windowSurface);
     SDL_RenderTexture(renderer, windowTexture, NULL, NULL);
 
+    /*
     printf("\n");
     for (int i = 0; i < strlen(buffer->data); i++) {
         printf("%c", buffer->data[i]);
     }
-    
+    */
     
     renderCursor();
 
@@ -146,17 +158,57 @@ void addToBuffer(const char *input) {
 
 void removeFromBuffer() {
 
-    if (buffer->gapLeft > 0) {
-        backspace(buffer);
-        renderKey();
+    backspace(buffer);
+    renderKey();
+}
+
+bool openTextFile() {
+
+    textFile = fopen("assets/text.txt", "r");
+
+    if (textFile == NULL) {
+        printf("Error while opening text file");
+        return false;
     }
+
+    return true;
+}
+
+void closeTextFile() {
+
+    fclose(textFile);
+}
+
+void displayTextFile() {
+    char c;
+
+    while ((c = fgetc(textFile)) != EOF) {
+        
+        addToBuffer((const char*)&c);
+    }
+
+    renderKey();
+}
+
+void writeTextFile() {
+
+    textFile = fopen("assets/text.txt", "w");
+
+    if (textFile == NULL) {
+        printf("Error while opening text file");
+        return;
+    }
+
+    fputs(renderText, textFile);
+
+    fclose(textFile);
 }
 
 
 // sets the application icon
 SDL_AppResult icon() {
 
-    SDL_Surface *icon = IMG_Load("assets/server-icon.png");
+    SDL_Surface *icon = IMG_Load("assets/icon.jpg");
 
     if(!icon) {
 
@@ -239,7 +291,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     SDL_StartTextInput(window);
 
-    printf("\nBuffer totalSize: %d", buffer->totalSize);
+    openTextFile();
+    displayTextFile();
+
+    //printf("\nBuffer totalSize: %d", buffer->totalSize);
     
     return SDL_APP_CONTINUE;
 }
@@ -256,13 +311,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
                 case SDLK_BACKSPACE: 
                     removeFromBuffer();
                     break;
+                case SDLK_TAB:
+                    for (int i = 0; i < 4; i++) {
+                        addToBuffer(" ");
+                    }
+                    break;
+                case SDLK_RETURN:
+                    addToBuffer("\n");
+                    break;
                 case SDLK_LEFT:
-                    shiftLeft((buffer->gapLeft - 1), buffer);
+                    moveCursor((buffer->gapLeft - 1), buffer);
                     cursorMoveRender();
                     renderKey();
                     break;
                 case SDLK_RIGHT:
-                    shiftRight((buffer->gapLeft + 1), buffer);
+                    moveCursor((buffer->gapLeft + 1), buffer);
                     cursorMoveRender();
                     renderKey();
                     break;
@@ -296,6 +359,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 //Frees memory upon app quit
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
+    closeTextFile();
+    writeTextFile();
     SDL_StopTextInput(window);
 
     free(buffer);

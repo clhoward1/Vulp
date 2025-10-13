@@ -8,10 +8,12 @@
 
 typedef struct {
     char *data;
-    size_t gapLeft;
+    int gapLeft;
     size_t gapRight;
     size_t totalSize;
     size_t gapSize;
+    size_t lineCount;
+    size_t lineOffset;
 } gapBuffer;
 
 

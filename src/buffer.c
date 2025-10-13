@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include "buffer.h"
+#include "cursor.h"
 
 
 gapBuffer* initBuffer() {
@@ -13,11 +14,15 @@ gapBuffer* initBuffer() {
     buffer->totalSize = GAP_SIZE;
     buffer->gapSize = GAP_SIZE;
     buffer->data = (char*)calloc(buffer->totalSize, 1);
+    buffer->lineCount = 0;
+    buffer->lineOffset = 0;
 
     return buffer;
 }
 
 void shiftLeft(int index, gapBuffer *buffer) {
+
+    int i = 1;
 
     while (index < buffer->gapLeft && index >= 0) {
         
@@ -26,12 +31,29 @@ void shiftLeft(int index, gapBuffer *buffer) {
         printf("\ngapLeft: %d", buffer->gapLeft);
         printf("\n strlen: %d", strlen(buffer->data));
         */
+        if (buffer->lineOffset > 0) {
+            buffer->lineOffset--;
+        }
+        
         
         buffer->gapLeft--;
         
+        
+        if (buffer->data[buffer->gapLeft] == '\n') {
+            buffer->lineCount--;
+            buffer->lineOffset = 1;
+
+            while ((buffer->data[buffer->gapLeft - i]) != '\n' && buffer->gapLeft - i > 0) {
+                buffer->lineOffset++;
+                i++;
+            }
+        }
+            
         buffer->data[buffer->gapRight] = buffer->data[buffer->gapLeft];
         
         buffer->gapRight--;
+
+        
         
         /*
         printf("\n");
@@ -42,19 +64,25 @@ void shiftLeft(int index, gapBuffer *buffer) {
         printf("\nIndex location: %d", index);
         printf("\nCursor location: %d", buffer->gapLeft);
         */
-        
     } 
 }
 
 
 void shiftRight(int index, gapBuffer *buffer) {
 
-    while (index > buffer->gapLeft && buffer->gapRight + 1 < buffer->totalSize) { // this is wrong but idk how
-        
+    while (index > buffer->gapLeft && buffer->gapRight + 1 < buffer->totalSize) {
+        int i = 0;
+
         buffer->data[buffer->gapLeft] = buffer->data[buffer->gapRight + 1];
         
         buffer->gapLeft++;
         buffer->gapRight++;
+        buffer->lineOffset++;
+
+        if (buffer->data[buffer->gapRight] == '\n') {
+            buffer->lineCount++;
+            buffer->lineOffset = 0;
+        }
         
         /*
         printf("\n");
@@ -68,9 +96,10 @@ void shiftRight(int index, gapBuffer *buffer) {
 }
 
 void grow(int newSize, gapBuffer *buffer) {
+
     size_t back = buffer->totalSize - buffer->gapLeft;
     size_t oldSize = buffer->totalSize;
-    printf("\n Add Gap: %d", GAP_SIZE);
+    //printf("\n Add Gap: %d", GAP_SIZE);
 
     buffer->data = realloc(buffer->data, newSize);
 
@@ -115,9 +144,17 @@ void insert(char *newChar, int index, gapBuffer *buffer) {
         moveCursor(index, buffer);
     }
 
+    buffer->lineOffset++;
+
+    if (*newChar == '\n') {
+        buffer->lineCount++;
+        buffer->lineOffset = 0;
+    }
+
     buffer->data[buffer->gapLeft] = (char)*newChar;
     buffer->gapLeft++;
     buffer->gapSize--;
+    
     
     // Grow gap if empty
     if (!buffer->gapSize) {
@@ -133,9 +170,24 @@ void insert(char *newChar, int index, gapBuffer *buffer) {
 }
 
 void backspace(gapBuffer *buffer) {
+    int i = 1;
 
-    buffer->data[buffer->gapLeft] = '\0';
-    buffer->gapLeft--;
-    buffer->gapSize++;
-    
+    if (buffer->gapLeft > 0) {
+        buffer->lineOffset--;
+        buffer->gapLeft--;
+
+        if (buffer->data[buffer->gapLeft] == '\n') {
+            buffer->lineCount--;
+            buffer->lineOffset = 0;
+
+            while ((buffer->data[buffer->gapLeft - i]) != '\n' && buffer->gapLeft - i > 0) {
+                buffer->lineOffset++;
+                i++;
+            }
+        }
+        buffer->data[buffer->gapLeft + 1] = '\0';
+        
+        buffer->gapSize++;
+        
+    }
 }
