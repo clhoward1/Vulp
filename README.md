@@ -9,7 +9,9 @@ To run the program for yourself, download the out folder and run the executable 
 Controls: 
 
 Left and Right arrow keys to move the cursor.
+
 Backspace, Tab and Enter function as they should as well.
+
 Ctrl + S shortcut to save your file.
 
 #
