@@ -40,7 +40,12 @@ cursor *cur;
 
 Uint64 currentTime, previousTime = 0;
 
+char *textFileName;
 FILE *textFile;
+
+SDL_DialogFileFilter fileFilter;
+
+
 
 //initial render
 void initialRender() {
@@ -162,22 +167,6 @@ void removeFromBuffer() {
     renderKey();
 }
 
-bool openTextFile() {
-
-    textFile = fopen("assets/text.txt", "r");
-
-    if (textFile == NULL) {
-        printf("Error while opening text file");
-        return false;
-    }
-
-    return true;
-}
-
-void closeTextFile() {
-
-    fclose(textFile);
-}
 
 void displayTextFile() {
     char c;
@@ -190,18 +179,52 @@ void displayTextFile() {
     renderKey();
 }
 
+void closeTextFile() {
+
+    fclose(textFile);
+}
+
+void fileCallback(void *userdata, const char * const *filename, int filter) {
+
+    if (filename) {
+        printf(*filename);
+
+        textFileName = *filename;
+        printf(textFileName);
+        textFile = fopen(*filename, "r");
+        displayTextFile();
+
+        if (textFile == NULL) {
+            printf("Error while opening text file");
+            return;
+        }
+        
+    }
+}
+
+void openTextFile() {
+    
+    SDL_ShowOpenFileDialog(fileCallback, NULL, window, &fileFilter, 1, NULL, false);
+}
+
+
 void writeTextFile() {
 
-    textFile = fopen("assets/text.txt", "w");
+    printf(textFileName);
+
+    textFile = fopen(textFileName, "w");
 
     if (textFile == NULL) {
         printf("Error while opening text file");
         return;
     }
 
+    printf(renderText);
     fputs(renderText, textFile);
 
     fclose(textFile);
+
+    textFile = fopen(textFileName, "r");
 }
 
 
@@ -291,17 +314,29 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 
     SDL_StartTextInput(window);
 
+    fileFilter.name = "Text Document, .txt";
+    fileFilter.pattern = "txt";
+
     openTextFile();
-    displayTextFile();
 
     //printf("\nBuffer totalSize: %d", buffer->totalSize);
     
+    
+
     return SDL_APP_CONTINUE;
 }
 
 //Waits for events to be called
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
+    //array of concurrently pressed keys
+    const bool* keys = SDL_GetKeyboardState(NULL);
+
+    if ((keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) && keys[SDL_SCANCODE_S]) {
+        closeTextFile();
+        writeTextFile();
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "File Saved", "File has been saved.", window);
+    }
 
     switch (event->type) {
         case SDL_EVENT_QUIT:
@@ -329,6 +364,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
                     cursorMoveRender();
                     renderKey();
                     break;
+                //TODO: Functioning up and down cursor movement
+                /*  
+                case SDLK_UP:
+                    moveCursor((buffer->gapLeft - buffer->lineOffset), buffer);
+                    buffer->lineCount--;
+                    cursorMoveRender();
+                    renderKey();
+                    break;
+                case SDLK_DOWN:
+                    moveCursor((buffer->gapLeft + buffer->lineOffset), buffer);
+                    buffer->lineCount++;
+                    cursorMoveRender();
+                    renderKey();
+                    break;
+                */
             }
             break;
         case SDL_EVENT_TEXT_INPUT:
@@ -337,6 +387,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         case SDL_EVENT_WINDOW_RESIZED:
             renderKey();
             break;
+        
     }
 
 
